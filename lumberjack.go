@@ -36,9 +36,9 @@ import (
 )
 
 const (
-	backupTimeFormat = "2006-01-02T15-04-05.000"
-	compressSuffix   = ".gz"
-	defaultMaxSize   = 100
+	defaultBackupTimeFormat = "2006-01-02T15-04-05.000"
+	compressSuffix          = ".gz"
+	defaultMaxSize          = 100
 )
 
 // ensure we always implement io.WriteCloser
@@ -107,6 +107,10 @@ type Logger struct {
 	// using gzip. The default is not to perform compression.
 	Compress bool `json:"compress" yaml:"compress"`
 
+	BackupTimeFormat string `json:"backuptimeformat" yaml:"backuptimeformat"`
+
+	DisableMutex bool `json:"disablemutex" yaml:"disablemutex"`
+
 	size int64
 	file *os.File
 	mu   sync.Mutex
@@ -133,8 +137,10 @@ var (
 // current time, and a new log file is created using the original log file name.
 // If the length of the write is greater than MaxSize, an error is returned.
 func (l *Logger) Write(p []byte) (n int, err error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	if !l.DisableMutex {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+	}
 
 	writeLen := int64(len(p))
 	if writeLen > l.max() {
@@ -161,10 +167,23 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+func (l *Logger) Sync() error {
+	if !l.DisableMutex {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+	}
+	if l.file == nil {
+		return nil
+	}
+	return l.file.Sync()
+}
+
 // Close implements io.Closer, and closes the current logfile.
 func (l *Logger) Close() error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	if !l.DisableMutex {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+	}
 	return l.close()
 }
 
@@ -184,8 +203,10 @@ func (l *Logger) close() error {
 // SIGHUP.  After rotating, this initiates compression and removal of old log
 // files according to the configuration.
 func (l *Logger) Rotate() error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	if !l.DisableMutex {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+	}
 	return l.rotate()
 }
 
@@ -218,7 +239,7 @@ func (l *Logger) openNew() error {
 		// Copy the mode off the old logfile.
 		mode = info.Mode()
 		// move the existing file
-		newname := backupName(name, l.LocalTime)
+		newname := l.backupName(name, l.LocalTime)
 		if err := os.Rename(name, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
@@ -241,10 +262,18 @@ func (l *Logger) openNew() error {
 	return nil
 }
 
+func (l *Logger) backupTimeFormat() string {
+	if l.BackupTimeFormat != "" {
+		return l.BackupTimeFormat
+	} else {
+		return defaultBackupTimeFormat
+	}
+}
+
 // backupName creates a new filename from the given name, inserting a timestamp
 // between the filename and the extension, using the local time if requested
 // (otherwise UTC).
-func backupName(name string, local bool) string {
+func (l *Logger) backupName(name string, local bool) string {
 	dir := filepath.Dir(name)
 	filename := filepath.Base(name)
 	ext := filepath.Ext(filename)
@@ -254,7 +283,7 @@ func backupName(name string, local bool) string {
 		t = t.UTC()
 	}
 
-	timestamp := t.Format(backupTimeFormat)
+	timestamp := t.Format(l.backupTimeFormat())
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 
@@ -438,7 +467,7 @@ func (l *Logger) timeFromName(filename, prefix, ext string) (time.Time, error) {
 		return time.Time{}, errors.New("mismatched extension")
 	}
 	ts := filename[len(prefix) : len(filename)-len(ext)]
-	return time.Parse(backupTimeFormat, ts)
+	return time.Parse(l.backupTimeFormat(), ts)
 }
 
 // max returns the maximum size in bytes of log files before rolling.

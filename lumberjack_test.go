@@ -96,7 +96,7 @@ func TestWriteTooLong(t *testing.T) {
 
 func TestMakeLogDir(t *testing.T) {
 	currentTime = fakeTime
-	dir := time.Now().Format("TestMakeLogDir" + backupTimeFormat)
+	dir := time.Now().Format("TestMakeLogDir" + defaultBackupTimeFormat)
 	dir = filepath.Join(os.TempDir(), dir)
 	defer os.RemoveAll(dir)
 	filename := logFile(dir)
@@ -458,7 +458,7 @@ func TestOldLogFiles(t *testing.T) {
 
 	// This gives us a time with the same precision as the time we get from the
 	// timestamp in the name.
-	t1, err := time.Parse(backupTimeFormat, fakeTime().UTC().Format(backupTimeFormat))
+	t1, err := time.Parse(defaultBackupTimeFormat, fakeTime().UTC().Format(defaultBackupTimeFormat))
 	isNil(err, t)
 
 	backup := backupFile(dir)
@@ -467,7 +467,7 @@ func TestOldLogFiles(t *testing.T) {
 
 	newFakeTime()
 
-	t2, err := time.Parse(backupTimeFormat, fakeTime().UTC().Format(backupTimeFormat))
+	t2, err := time.Parse(defaultBackupTimeFormat, fakeTime().UTC().Format(defaultBackupTimeFormat))
 	isNil(err, t)
 
 	backup2 := backupFile(dir)
@@ -755,7 +755,7 @@ compress = true`[1:]
 // It should be based on the name of the test, to keep parallel tests from
 // colliding, and must be cleaned up after the test is finished.
 func makeTempDir(name string, t testing.TB) string {
-	dir := time.Now().Format(name + backupTimeFormat)
+	dir := time.Now().Format(name + defaultBackupTimeFormat)
 	dir = filepath.Join(os.TempDir(), dir)
 	isNilUp(os.Mkdir(dir, 0700), t, 1)
 	return dir
@@ -779,17 +779,17 @@ func logFile(dir string) string {
 }
 
 func backupFile(dir string) string {
-	return filepath.Join(dir, "foobar-"+fakeTime().UTC().Format(backupTimeFormat)+".log")
+	return filepath.Join(dir, "foobar-"+fakeTime().UTC().Format(defaultBackupTimeFormat)+".log")
 }
 
 func backupFileLocal(dir string) string {
-	return filepath.Join(dir, "foobar-"+fakeTime().Format(backupTimeFormat)+".log")
+	return filepath.Join(dir, "foobar-"+fakeTime().Format(defaultBackupTimeFormat)+".log")
 }
 
 // logFileLocal returns the log file name in the given directory for the current
 // fake time using the local timezone.
 func logFileLocal(dir string) string {
-	return filepath.Join(dir, fakeTime().Format(backupTimeFormat))
+	return filepath.Join(dir, fakeTime().Format(defaultBackupTimeFormat))
 }
 
 // fileCount checks that the number of files in the directory is exp.
